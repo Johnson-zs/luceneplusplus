@@ -1,0 +1,655 @@
+Index: luceneplusplus/include/lucene++/LuceneHeaders.h
+===================================================================
+--- luceneplusplus.orig/include/lucene++/LuceneHeaders.h
++++ luceneplusplus/include/lucene++/LuceneHeaders.h
+@@ -17,6 +17,9 @@
+ #include "KeywordTokenizer.h"
+ #include "LowerCaseFilter.h"
+ #include "LowerCaseTokenizer.h"
++#include "NGramAnalyzer.h"
++#include "NGramTokenFilter.h"
++#include "NGramTokenizer.h"
+ #include "PerFieldAnalyzerWrapper.h"
+ #include "PorterStemFilter.h"
+ #include "SimpleAnalyzer.h"
+Index: luceneplusplus/include/lucene++/LuceneTypes.h
+===================================================================
+--- luceneplusplus.orig/include/lucene++/LuceneTypes.h
++++ luceneplusplus/include/lucene++/LuceneTypes.h
+@@ -36,6 +36,9 @@ DECLARE_SHARED_PTR(LowerCaseFilter)
+ DECLARE_SHARED_PTR(LowerCaseTokenizer)
+ DECLARE_SHARED_PTR(MappingCharFilter)
+ DECLARE_SHARED_PTR(NormalizeCharMap)
++DECLARE_SHARED_PTR(NGramAnalyzer)
++DECLARE_SHARED_PTR(NGramTokenFilter)
++DECLARE_SHARED_PTR(NGramTokenizer)
+ DECLARE_SHARED_PTR(NumericTokenStream)
+ DECLARE_SHARED_PTR(OffsetAttribute)
+ DECLARE_SHARED_PTR(PayloadAttribute)
+Index: luceneplusplus/include/lucene++/NGramAnalyzer.h
+===================================================================
+--- /dev/null
++++ luceneplusplus/include/lucene++/NGramAnalyzer.h
+@@ -0,0 +1,34 @@
++/////////////////////////////////////////////////////////////////////////////
++// Copyright (c) 2009-2014 Alan Wright. All rights reserved.
++// Distributable under the terms of either the Apache License (Version 2.0)
++// or the GNU Lesser General Public License.
++/////////////////////////////////////////////////////////////////////////////
++
++#ifndef NGRAMANALYZER_H
++#define NGRAMANALYZER_H
++
++#include "Analyzer.h"
++
++namespace Lucene {
++
++/// An Analyzer that uses {@link NGramTokenizer}.
++class LPPAPI NGramAnalyzer : public Analyzer {
++public:
++    NGramAnalyzer();
++    NGramAnalyzer(int32_t minGram, int32_t maxGram);
++    virtual ~NGramAnalyzer();
++
++    LUCENE_CLASS(NGramAnalyzer);
++
++protected:
++    int32_t minGram;
++    int32_t maxGram;
++
++public:
++    virtual TokenStreamPtr tokenStream(const String& fieldName, const ReaderPtr& reader);
++    virtual TokenStreamPtr reusableTokenStream(const String& fieldName, const ReaderPtr& reader);
++};
++
++}
++
++#endif
+Index: luceneplusplus/include/lucene++/NGramTokenFilter.h
+===================================================================
+--- /dev/null
++++ luceneplusplus/include/lucene++/NGramTokenFilter.h
+@@ -0,0 +1,57 @@
++/////////////////////////////////////////////////////////////////////////////
++// Copyright (c) 2009-2014 Alan Wright. All rights reserved.
++// Distributable under the terms of either the Apache License (Version 2.0)
++// or the GNU Lesser General Public License.
++/////////////////////////////////////////////////////////////////////////////
++
++#ifndef NGRAMTOKENFILTER_H
++#define NGRAMTOKENFILTER_H
++
++#include "TokenFilter.h"
++
++namespace Lucene {
++
++/// Tokenizes each input token into n-grams of the given size(s).
++///
++/// Offsets from the original token are preserved. All grams produced from the
++/// same input token are emitted at the same position.
++class LPPAPI NGramTokenFilter : public TokenFilter {
++public:
++    static const bool DEFAULT_PRESERVE_ORIGINAL;
++
++public:
++    NGramTokenFilter(const TokenStreamPtr& input, int32_t gramSize);
++    NGramTokenFilter(const TokenStreamPtr& input, int32_t minGram, int32_t maxGram);
++    NGramTokenFilter(const TokenStreamPtr& input, int32_t minGram, int32_t maxGram, bool preserveOriginal);
++
++    virtual ~NGramTokenFilter();
++
++    LUCENE_CLASS(NGramTokenFilter);
++
++protected:
++    int32_t minGram;
++    int32_t maxGram;
++    bool preserveOriginal;
++
++    CharArray curTermBuffer;
++    int32_t curTermLength;
++    int32_t curGramSize;
++    int32_t curPos;
++    int32_t curPosIncr;
++    AttributeSourceStatePtr state;
++
++    TermAttributePtr termAtt;
++    PositionIncrementAttributePtr posIncrAtt;
++
++protected:
++    void init(int32_t minGram, int32_t maxGram, bool preserveOriginal);
++
++public:
++    virtual bool incrementToken();
++    virtual void reset();
++    virtual void end();
++};
++
++}
++
++#endif
+Index: luceneplusplus/include/lucene++/NGramTokenizer.h
+===================================================================
+--- /dev/null
++++ luceneplusplus/include/lucene++/NGramTokenizer.h
+@@ -0,0 +1,69 @@
++/////////////////////////////////////////////////////////////////////////////
++// Copyright (c) 2009-2014 Alan Wright. All rights reserved.
++// Distributable under the terms of either the Apache License (Version 2.0)
++// or the GNU Lesser General Public License.
++/////////////////////////////////////////////////////////////////////////////
++
++#ifndef NGRAMTOKENIZER_H
++#define NGRAMTOKENIZER_H
++
++#include "Tokenizer.h"
++
++namespace Lucene {
++
++/// Tokenizes the input into n-grams of the given size(s).
++///
++/// This tokenizer emits tokens by increasing start offset, then increasing
++/// length. Offsets identify the exact characters in the original input that
++/// produced each term.
++class LPPAPI NGramTokenizer : public Tokenizer {
++public:
++    static const int32_t DEFAULT_MIN_NGRAM_SIZE;
++    static const int32_t DEFAULT_MAX_NGRAM_SIZE;
++
++public:
++    NGramTokenizer(const ReaderPtr& input);
++    NGramTokenizer(const ReaderPtr& input, int32_t minGram, int32_t maxGram);
++    NGramTokenizer(const AttributeSourcePtr& source, const ReaderPtr& input, int32_t minGram, int32_t maxGram);
++    NGramTokenizer(const AttributeFactoryPtr& factory, const ReaderPtr& input, int32_t minGram, int32_t maxGram);
++
++    virtual ~NGramTokenizer();
++
++    LUCENE_CLASS(NGramTokenizer);
++
++protected:
++    CharArray buffer;
++    int32_t bufferStart;
++    int32_t bufferEnd;
++    int32_t offset;
++    int32_t gramSize;
++    int32_t minGram;
++    int32_t maxGram;
++    bool exhausted;
++    int32_t lastCheckedChar;
++    int32_t lastNonTokenChar;
++
++    TermAttributePtr termAtt;
++    OffsetAttributePtr offsetAtt;
++    PositionIncrementAttributePtr posIncrAtt;
++
++protected:
++    void init(int32_t minGram, int32_t maxGram);
++    void resetState();
++    void fillBuffer();
++    void consume();
++    void updateLastNonTokenChar();
++
++    /// Only collect characters which satisfy this condition.
++    virtual bool isTokenChar(wchar_t chr);
++
++public:
++    virtual bool incrementToken();
++    virtual void end();
++    virtual void reset();
++    virtual void reset(const ReaderPtr& input);
++};
++
++}
++
++#endif
+Index: luceneplusplus/src/core/analysis/ngram/NGramAnalyzer.cpp
+===================================================================
+--- /dev/null
++++ luceneplusplus/src/core/analysis/ngram/NGramAnalyzer.cpp
+@@ -0,0 +1,47 @@
++/////////////////////////////////////////////////////////////////////////////
++// Copyright (c) 2009-2014 Alan Wright. All rights reserved.
++// Distributable under the terms of either the Apache License (Version 2.0)
++// or the GNU Lesser General Public License.
++/////////////////////////////////////////////////////////////////////////////
++
++#include "LuceneInc.h"
++#include "NGramAnalyzer.h"
++#include "NGramTokenizer.h"
++
++namespace Lucene {
++
++NGramAnalyzer::NGramAnalyzer() {
++    minGram = NGramTokenizer::DEFAULT_MIN_NGRAM_SIZE;
++    maxGram = NGramTokenizer::DEFAULT_MAX_NGRAM_SIZE;
++}
++
++NGramAnalyzer::NGramAnalyzer(int32_t minGram, int32_t maxGram) {
++    if (minGram < 1) {
++        boost::throw_exception(IllegalArgumentException(L"minGram must be greater than zero"));
++    }
++    if (minGram > maxGram) {
++        boost::throw_exception(IllegalArgumentException(L"minGram must not be greater than maxGram"));
++    }
++    this->minGram = minGram;
++    this->maxGram = maxGram;
++}
++
++NGramAnalyzer::~NGramAnalyzer() {
++}
++
++TokenStreamPtr NGramAnalyzer::tokenStream(const String& fieldName, const ReaderPtr& reader) {
++    return newLucene<NGramTokenizer>(reader, minGram, maxGram);
++}
++
++TokenStreamPtr NGramAnalyzer::reusableTokenStream(const String& fieldName, const ReaderPtr& reader) {
++    TokenizerPtr tokenizer(boost::dynamic_pointer_cast<Tokenizer>(getPreviousTokenStream()));
++    if (!tokenizer) {
++        tokenizer = newLucene<NGramTokenizer>(reader, minGram, maxGram);
++        setPreviousTokenStream(tokenizer);
++    } else {
++        tokenizer->reset(reader);
++    }
++    return tokenizer;
++}
++
++}
+Index: luceneplusplus/src/core/analysis/ngram/NGramTokenFilter.cpp
+===================================================================
+--- /dev/null
++++ luceneplusplus/src/core/analysis/ngram/NGramTokenFilter.cpp
+@@ -0,0 +1,110 @@
++/////////////////////////////////////////////////////////////////////////////
++// Copyright (c) 2009-2014 Alan Wright. All rights reserved.
++// Distributable under the terms of either the Apache License (Version 2.0)
++// or the GNU Lesser General Public License.
++/////////////////////////////////////////////////////////////////////////////
++
++#include "LuceneInc.h"
++#include "NGramTokenFilter.h"
++#include "TermAttribute.h"
++#include "PositionIncrementAttribute.h"
++
++namespace Lucene {
++
++const bool NGramTokenFilter::DEFAULT_PRESERVE_ORIGINAL = false;
++
++NGramTokenFilter::NGramTokenFilter(const TokenStreamPtr& input, int32_t gramSize) : TokenFilter(input) {
++    init(gramSize, gramSize, DEFAULT_PRESERVE_ORIGINAL);
++}
++
++NGramTokenFilter::NGramTokenFilter(const TokenStreamPtr& input, int32_t minGram, int32_t maxGram) : TokenFilter(input) {
++    init(minGram, maxGram, DEFAULT_PRESERVE_ORIGINAL);
++}
++
++NGramTokenFilter::NGramTokenFilter(const TokenStreamPtr& input, int32_t minGram, int32_t maxGram, bool preserveOriginal) : TokenFilter(input) {
++    init(minGram, maxGram, preserveOriginal);
++}
++
++NGramTokenFilter::~NGramTokenFilter() {
++}
++
++void NGramTokenFilter::init(int32_t minGram, int32_t maxGram, bool preserveOriginal) {
++    if (minGram < 1) {
++        boost::throw_exception(IllegalArgumentException(L"minGram must be greater than zero"));
++    }
++    if (minGram > maxGram) {
++        boost::throw_exception(IllegalArgumentException(L"minGram must not be greater than maxGram"));
++    }
++
++    this->minGram = minGram;
++    this->maxGram = maxGram;
++    this->preserveOriginal = preserveOriginal;
++
++    curTermLength = 0;
++    curGramSize = minGram;
++    curPos = 0;
++    curPosIncr = 0;
++
++    termAtt = addAttribute<TermAttribute>();
++    posIncrAtt = addAttribute<PositionIncrementAttribute>();
++}
++
++bool NGramTokenFilter::incrementToken() {
++    while (true) {
++        if (!curTermBuffer) {
++            if (!input->incrementToken()) {
++                return false;
++            }
++
++            state = captureState();
++            curTermLength = termAtt->termLength();
++            curPosIncr += posIncrAtt->getPositionIncrement();
++            curPos = 0;
++
++            if (preserveOriginal && curTermLength < minGram) {
++                posIncrAtt->setPositionIncrement(curPosIncr);
++                curPosIncr = 0;
++                return true;
++            }
++
++            curTermBuffer = CharArray::newInstance(curTermLength);
++            std::memcpy(curTermBuffer.get(), termAtt->termBufferArray(), curTermLength * sizeof(wchar_t));
++            curGramSize = minGram;
++        }
++
++        if (curGramSize > maxGram || curPos + curGramSize > curTermLength) {
++            ++curPos;
++            curGramSize = minGram;
++        }
++
++        if (curPos + curGramSize <= curTermLength) {
++            restoreState(state);
++            termAtt->setTermBuffer(curTermBuffer.get(), curPos, curGramSize);
++            posIncrAtt->setPositionIncrement(curPosIncr);
++            curPosIncr = 0;
++            ++curGramSize;
++            return true;
++        } else if (preserveOriginal && curTermLength > maxGram) {
++            restoreState(state);
++            termAtt->setTermBuffer(curTermBuffer.get(), 0, curTermLength);
++            posIncrAtt->setPositionIncrement(0);
++            curTermBuffer.reset();
++            return true;
++        }
++
++        curTermBuffer.reset();
++    }
++}
++
++void NGramTokenFilter::reset() {
++    TokenFilter::reset();
++    curTermBuffer.reset();
++    curPosIncr = 0;
++}
++
++void NGramTokenFilter::end() {
++    TokenFilter::end();
++    posIncrAtt->setPositionIncrement(curPosIncr);
++}
++
++}
+Index: luceneplusplus/src/core/analysis/ngram/NGramTokenizer.cpp
+===================================================================
+--- /dev/null
++++ luceneplusplus/src/core/analysis/ngram/NGramTokenizer.cpp
+@@ -0,0 +1,166 @@
++/////////////////////////////////////////////////////////////////////////////
++// Copyright (c) 2009-2014 Alan Wright. All rights reserved.
++// Distributable under the terms of either the Apache License (Version 2.0)
++// or the GNU Lesser General Public License.
++/////////////////////////////////////////////////////////////////////////////
++
++#include "LuceneInc.h"
++#include "NGramTokenizer.h"
++#include "CharReader.h"
++#include "TermAttribute.h"
++#include "OffsetAttribute.h"
++#include "PositionIncrementAttribute.h"
++#include "Reader.h"
++
++namespace Lucene {
++
++const int32_t NGramTokenizer::DEFAULT_MIN_NGRAM_SIZE = 1;
++const int32_t NGramTokenizer::DEFAULT_MAX_NGRAM_SIZE = 2;
++
++NGramTokenizer::NGramTokenizer(const ReaderPtr& input) : Tokenizer(input) {
++    init(DEFAULT_MIN_NGRAM_SIZE, DEFAULT_MAX_NGRAM_SIZE);
++}
++
++NGramTokenizer::NGramTokenizer(const ReaderPtr& input, int32_t minGram, int32_t maxGram) : Tokenizer(input) {
++    init(minGram, maxGram);
++}
++
++NGramTokenizer::NGramTokenizer(const AttributeSourcePtr& source, const ReaderPtr& input, int32_t minGram, int32_t maxGram) : Tokenizer(source, input) {
++    init(minGram, maxGram);
++}
++
++NGramTokenizer::NGramTokenizer(const AttributeFactoryPtr& factory, const ReaderPtr& input, int32_t minGram, int32_t maxGram) : Tokenizer(factory, input) {
++    init(minGram, maxGram);
++}
++
++NGramTokenizer::~NGramTokenizer() {
++}
++
++void NGramTokenizer::init(int32_t minGram, int32_t maxGram) {
++    if (minGram < 1) {
++        boost::throw_exception(IllegalArgumentException(L"minGram must be greater than zero"));
++    }
++    if (minGram > maxGram) {
++        boost::throw_exception(IllegalArgumentException(L"minGram must not be greater than maxGram"));
++    }
++
++    this->minGram = minGram;
++    this->maxGram = maxGram;
++    buffer = CharArray::newInstance(2 * maxGram + 1024);
++
++    termAtt = addAttribute<TermAttribute>();
++    termAtt->resizeTermBuffer(maxGram);
++    offsetAtt = addAttribute<OffsetAttribute>();
++    posIncrAtt = addAttribute<PositionIncrementAttribute>();
++
++    resetState();
++}
++
++void NGramTokenizer::resetState() {
++    bufferStart = bufferEnd = buffer.size();
++    lastNonTokenChar = lastCheckedChar = bufferStart - 1;
++    offset = 0;
++    gramSize = minGram;
++    exhausted = false;
++}
++
++void NGramTokenizer::fillBuffer() {
++    if (exhausted || bufferStart < bufferEnd - maxGram - 1) {
++        return;
++    }
++
++    int32_t remaining = bufferEnd - bufferStart;
++    if (remaining > 0 && bufferStart > 0) {
++        std::memmove(buffer.get(), buffer.get() + bufferStart, remaining * sizeof(wchar_t));
++    }
++    bufferEnd = remaining;
++    lastCheckedChar -= bufferStart;
++    lastNonTokenChar -= bufferStart;
++    bufferStart = 0;
++
++    while (bufferEnd < buffer.size()) {
++        int32_t length = input->read(buffer.get(), bufferEnd, buffer.size() - bufferEnd);
++        if (length == -1) {
++            exhausted = true;
++            break;
++        }
++        bufferEnd += length;
++    }
++}
++
++void NGramTokenizer::consume() {
++    ++bufferStart;
++    ++offset;
++}
++
++void NGramTokenizer::updateLastNonTokenChar() {
++    int32_t termEnd = bufferStart + gramSize - 1;
++    if (termEnd > lastCheckedChar) {
++        for (int32_t i = termEnd; i > lastCheckedChar; --i) {
++            if (!isTokenChar(buffer[i])) {
++                lastNonTokenChar = i;
++                break;
++            }
++        }
++        lastCheckedChar = termEnd;
++    }
++}
++
++bool NGramTokenizer::isTokenChar(wchar_t chr) {
++    return true;
++}
++
++bool NGramTokenizer::incrementToken() {
++    clearAttributes();
++
++    while (true) {
++        fillBuffer();
++
++        if (gramSize > maxGram || bufferStart + gramSize > bufferEnd) {
++            if (bufferStart + 1 + minGram > bufferEnd) {
++                if (exhausted) {
++                    return false;
++                }
++                continue;
++            }
++            consume();
++            gramSize = minGram;
++            continue;
++        }
++
++        updateLastNonTokenChar();
++        if (lastNonTokenChar >= bufferStart && lastNonTokenChar < bufferStart + gramSize) {
++            consume();
++            gramSize = minGram;
++            continue;
++        }
++
++        termAtt->setTermBuffer(buffer.get(), bufferStart, gramSize);
++        posIncrAtt->setPositionIncrement(1);
++        offsetAtt->setOffset(correctOffset(offset), correctOffset(offset + gramSize));
++        ++gramSize;
++        return true;
++    }
++}
++
++void NGramTokenizer::end() {
++    int32_t endOffset = offset;
++    for (int32_t i = bufferStart; i < bufferEnd; ++i) {
++        ++endOffset;
++    }
++    endOffset = correctOffset(endOffset);
++    offsetAtt->setOffset(endOffset, endOffset);
++}
++
++void NGramTokenizer::reset() {
++    Tokenizer::reset(input);
++    resetState();
++}
++
++void NGramTokenizer::reset(const ReaderPtr& input) {
++    this->input = CharReader::get(input);
++    this->charStream = boost::dynamic_pointer_cast<CharStream>(this->input);
++    resetState();
++}
++
++}
+Index: luceneplusplus/src/test/analysis/ngram/NGramTokenFilterTest.cpp
+===================================================================
+--- /dev/null
++++ luceneplusplus/src/test/analysis/ngram/NGramTokenFilterTest.cpp
+@@ -0,0 +1,47 @@
++/////////////////////////////////////////////////////////////////////////////
++// Copyright (c) 2009-2014 Alan Wright. All rights reserved.
++// Distributable under the terms of either the Apache License (Version 2.0)
++// or the GNU Lesser General Public License.
++/////////////////////////////////////////////////////////////////////////////
++
++#include "TestInc.h"
++#include "BaseTokenStreamFixture.h"
++#include "NGramTokenFilter.h"
++#include "StringReader.h"
++#include "WhitespaceTokenizer.h"
++
++using namespace Lucene;
++
++typedef BaseTokenStreamFixture NGramTokenFilterTest;
++
++TEST_F(NGramTokenFilterTest, testMinMaxGrams) {
++    TokenStreamPtr stream = newLucene<NGramTokenFilter>(newLucene<WhitespaceTokenizer>(newLucene<StringReader>(L"abcde")), 2, 3);
++    checkTokenStreamContents(stream,
++                             newCollection<String>(L"ab", L"abc", L"bc", L"bcd", L"cd", L"cde", L"de"),
++                             newCollection<int32_t>(0, 0, 0, 0, 0, 0, 0),
++                             newCollection<int32_t>(5, 5, 5, 5, 5, 5, 5),
++                             newCollection<int32_t>(1, 0, 0, 0, 0, 0, 0));
++}
++
++TEST_F(NGramTokenFilterTest, testMultipleInputTokens) {
++    TokenStreamPtr stream = newLucene<NGramTokenFilter>(newLucene<WhitespaceTokenizer>(newLucene<StringReader>(L"abc xy")), 2, 2);
++    checkTokenStreamContents(stream,
++                             newCollection<String>(L"ab", L"bc", L"xy"),
++                             newCollection<int32_t>(0, 0, 4),
++                             newCollection<int32_t>(3, 3, 6),
++                             newCollection<int32_t>(1, 0, 1));
++}
++
++TEST_F(NGramTokenFilterTest, testPreserveOriginal) {
++    TokenStreamPtr stream = newLucene<NGramTokenFilter>(newLucene<WhitespaceTokenizer>(newLucene<StringReader>(L"a abcd")), 2, 3, true);
++    checkTokenStreamContents(stream,
++                             newCollection<String>(L"a", L"ab", L"abc", L"bc", L"bcd", L"cd", L"abcd"),
++                             newCollection<int32_t>(0, 2, 2, 2, 2, 2, 2),
++                             newCollection<int32_t>(1, 6, 6, 6, 6, 6, 6),
++                             newCollection<int32_t>(1, 1, 0, 0, 0, 0, 0));
++}
++
++TEST_F(NGramTokenFilterTest, testInvalidArguments) {
++    EXPECT_THROW(newLucene<NGramTokenFilter>(newLucene<WhitespaceTokenizer>(newLucene<StringReader>(L"abc")), 0, 1), IllegalArgumentException);
++    EXPECT_THROW(newLucene<NGramTokenFilter>(newLucene<WhitespaceTokenizer>(newLucene<StringReader>(L"abc")), 3, 2), IllegalArgumentException);
++}
+Index: luceneplusplus/src/test/analysis/ngram/NGramTokenizerTest.cpp
+===================================================================
+--- /dev/null
++++ luceneplusplus/src/test/analysis/ngram/NGramTokenizerTest.cpp
+@@ -0,0 +1,57 @@
++/////////////////////////////////////////////////////////////////////////////
++// Copyright (c) 2009-2014 Alan Wright. All rights reserved.
++// Distributable under the terms of either the Apache License (Version 2.0)
++// or the GNU Lesser General Public License.
++/////////////////////////////////////////////////////////////////////////////
++
++#include "TestInc.h"
++#include "BaseTokenStreamFixture.h"
++#include "NGramAnalyzer.h"
++#include "NGramTokenizer.h"
++#include "StringReader.h"
++
++using namespace Lucene;
++
++typedef BaseTokenStreamFixture NGramTokenizerTest;
++
++TEST_F(NGramTokenizerTest, testDefaultGrams) {
++    TokenStreamPtr stream = newLucene<NGramTokenizer>(newLucene<StringReader>(L"abc"));
++    checkTokenStreamContents(stream,
++                             newCollection<String>(L"a", L"ab", L"b", L"bc", L"c"),
++                             newCollection<int32_t>(0, 0, 1, 1, 2),
++                             newCollection<int32_t>(1, 2, 2, 3, 3),
++                             newCollection<int32_t>(1, 1, 1, 1, 1),
++                             3);
++}
++
++TEST_F(NGramTokenizerTest, testMinMaxGrams) {
++    TokenStreamPtr stream = newLucene<NGramTokenizer>(newLucene<StringReader>(L"abcde"), 2, 3);
++    checkTokenStreamContents(stream,
++                             newCollection<String>(L"ab", L"abc", L"bc", L"bcd", L"cd", L"cde", L"de"),
++                             newCollection<int32_t>(0, 0, 1, 1, 2, 2, 3),
++                             newCollection<int32_t>(2, 3, 3, 4, 4, 5, 5),
++                             newCollection<int32_t>(1, 1, 1, 1, 1, 1, 1),
++                             5);
++}
++
++TEST_F(NGramTokenizerTest, testPreservesCase) {
++    TokenStreamPtr stream = newLucene<NGramTokenizer>(newLucene<StringReader>(L"AbC"), 2, 2);
++    checkTokenStreamContents(stream, newCollection<String>(L"Ab", L"bC"));
++}
++
++TEST_F(NGramTokenizerTest, testAnalyzerReuse) {
++    AnalyzerPtr analyzer = newLucene<NGramAnalyzer>(2, 3);
++    checkAnalyzesToReuse(analyzer, L"abc", newCollection<String>(L"ab", L"abc", L"bc"),
++                         newCollection<int32_t>(0, 0, 1), newCollection<int32_t>(2, 3, 3),
++                         newCollection<int32_t>(1, 1, 1));
++    checkAnalyzesToReuse(analyzer, L"xy", newCollection<String>(L"xy"),
++                         newCollection<int32_t>(0), newCollection<int32_t>(2),
++                         newCollection<int32_t>(1));
++}
++
++TEST_F(NGramTokenizerTest, testInvalidArguments) {
++    EXPECT_THROW(newLucene<NGramTokenizer>(newLucene<StringReader>(L"abc"), 0, 1), IllegalArgumentException);
++    EXPECT_THROW(newLucene<NGramTokenizer>(newLucene<StringReader>(L"abc"), 3, 2), IllegalArgumentException);
++    EXPECT_THROW(newLucene<NGramAnalyzer>(0, 1), IllegalArgumentException);
++    EXPECT_THROW(newLucene<NGramAnalyzer>(3, 2), IllegalArgumentException);
++}
